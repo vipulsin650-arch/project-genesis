@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Message, ServiceContext } from '../types';
 import { getExpertResponse } from '../services/geminiService';
 import { dataService } from '../services/dataService';
+import TrackingOverlay from './TrackingOverlay';
 
 interface ChatInterfaceProps {
   initialService?: string;
@@ -12,11 +13,20 @@ interface ChatInterfaceProps {
   userId?: string;
 }
 
+interface DiagnosticState {
+  stage: 'greeting' | 'device' | 'damage' | 'questions' | 'completed';
+  deviceName?: string;
+  damageDescription?: string;
+  questionsAsked: number;
+}
+
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ initialService, expertName, onClose, onBookingConfirmed, context = 'pickup', userId = 'guest' }) => {
   const activeExpert = expertName || (initialService ? `${initialService} Support` : "Technical Lead");
   const [messages, setMessages] = useState<(Message & { sources?: any[] })[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [diagnosticState, setDiagnosticState] = useState<DiagnosticState>({ stage: 'greeting', questionsAsked: 0 });
+  const [showTracking, setShowTracking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatFileRef = useRef<HTMLInputElement>(null);
 
@@ -55,32 +65,83 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ initialService, expertNam
 
     const timestamp = new Date().toISOString();
     const userMsg: any = { id: Date.now().toString(), role: 'user', text: textToSend || "", image: base64Image, expert_name: activeExpert, created_at: timestamp };
-    
-    // Add user message to history
+
     const currentHistory = [...messages, { ...userMsg, timestamp: new Date() }];
     setMessages(currentHistory);
     await dataService.addMessage(userId, userMsg);
-    
+
     setInput('');
     setLoading(true);
 
     try {
-      // Pass full history context to Gemini
-      const reply = await getExpertResponse(currentHistory, textToSend || "Diagnostic data provided", base64Image);
-      const botMsg: any = { id: (Date.now() + 1).toString(), role: 'model', text: reply.text, sources: reply.sources, expert_name: activeExpert, created_at: new Date().toISOString() };
-      setMessages(prev => [...prev, { ...botMsg, timestamp: new Date() }]);
-      await dataService.addMessage(userId, botMsg);
-    } catch (err) { 
-      console.error(err); 
-    } finally { 
-      setLoading(false); 
+      const isGreeting = textToSend?.toLowerCase().trim() === 'hi';
+
+      if (isGreeting && diagnosticState.stage === 'greeting') {
+        setDiagnosticState({ ...diagnosticState, stage: 'device' });
+        const botMsg: any = {
+          id: (Date.now() + 1).toString(),
+          role: 'model',
+          text: "What's the device you need help with?\n\n• Smartphone\n• Laptop\n• AC Unit\n• Refrigerator\n• Other Device",
+          expert_name: activeExpert,
+          created_at: timestamp
+        };
+        setMessages(prev => [...prev, { ...botMsg, timestamp: new Date() }]);
+        await dataService.addMessage(userId, botMsg);
+      } else if (diagnosticState.stage === 'device' && isGreeting === false) {
+        setDiagnosticState({ ...diagnosticState, stage: 'damage', deviceName: textToSend });
+        const botMsg: any = {
+          id: (Date.now() + 1).toString(),
+          role: 'model',
+          text: "What's the damage or issue?\n\n• Screen Cracked\n• Not Turning On\n• Battery Issue\n• Overheating\n• Other",
+          expert_name: activeExpert,
+          created_at: timestamp
+        };
+        setMessages(prev => [...prev, { ...botMsg, timestamp: new Date() }]);
+        await dataService.addMessage(userId, botMsg);
+      } else if (diagnosticState.stage === 'damage') {
+        setDiagnosticState({ ...diagnosticState, stage: 'questions', damageDescription: textToSend, questionsAsked: 0 });
+        const reply = await getExpertResponse(currentHistory, textToSend || "Device issue provided", base64Image);
+        const botMsg: any = { id: (Date.now() + 1).toString(), role: 'model', text: reply.text, sources: reply.sources, expert_name: activeExpert, created_at: new Date().toISOString() };
+        setMessages(prev => [...prev, { ...botMsg, timestamp: new Date() }]);
+        await dataService.addMessage(userId, botMsg);
+      } else if (diagnosticState.stage === 'questions') {
+        if (textToSend?.includes('BILL_BREAKDOWN')) {
+          setDiagnosticState({ ...diagnosticState, stage: 'completed' });
+        }
+        const reply = await getExpertResponse(currentHistory, textToSend || "Diagnostic data provided", base64Image);
+        const botMsg: any = { id: (Date.now() + 1).toString(), role: 'model', text: reply.text, sources: reply.sources, expert_name: activeExpert, created_at: new Date().toISOString() };
+        setMessages(prev => [...prev, { ...botMsg, timestamp: new Date() }]);
+        await dataService.addMessage(userId, botMsg);
+      } else {
+        const reply = await getExpertResponse(currentHistory, textToSend || "Diagnostic data provided", base64Image);
+        const botMsg: any = { id: (Date.now() + 1).toString(), role: 'model', text: reply.text, sources: reply.sources, expert_name: activeExpert, created_at: new Date().toISOString() };
+        setMessages(prev => [...prev, { ...botMsg, timestamp: new Date() }]);
+        await dataService.addMessage(userId, botMsg);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   const simulatePayment = async (msgText: string) => {
     const match = msgText.match(/Total:\s*₹\s*([0-9,]+)/i);
     const price = match ? match[1] : "500";
-    
+
+    const botMsg: any = {
+      id: (Date.now() + 1).toString(),
+      role: 'model',
+      text: "Fetching Delivery Partner...",
+      expert_name: activeExpert,
+      created_at: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, { ...botMsg, timestamp: new Date() }]);
+
+    setTimeout(() => {
+      setShowTracking(true);
+    }, 1500);
+
     await dataService.addRepair(userId, {
       service_name: initialService || 'Hardware Fix',
       expert_name: activeExpert,
@@ -93,6 +154,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ initialService, expertNam
       onBookingConfirmed(initialService || 'Hardware Fix');
     }
   };
+
+  if (showTracking) {
+    return (
+      <TrackingOverlay
+        userCoords={{ lat: 12.9716, lng: 77.5946 }}
+        serviceName={initialService || 'Hardware Repair'}
+        onClose={() => {
+          setShowTracking(false);
+          onClose();
+        }}
+        arrivalMinutes={20}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col h-full bg-slate-50 max-w-md mx-auto overflow-hidden">

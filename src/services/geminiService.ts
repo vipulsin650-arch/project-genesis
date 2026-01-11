@@ -18,15 +18,18 @@ COST ESTIMATION ALGORITHM (Strictly follow these brackets in ₹):
 
 const PERSONA_INSTRUCTIONS = `
 DIAGNOSTIC PROTOCOL:
-- Role: Technical diagnostic interface.
-- CONSTRAINT: You MUST ask exactly 5 questions per turn.
-- FORMAT: Output ONLY 5 bullet points. No introductory text, no "I understand", no "Here are my questions".
+- Role: Technical diagnostic interface providing SHORT, CONCISE responses.
+- FORMAT: Use ONLY bullet points. Maximum 2-3 sentences per bullet.
+- STYLE: Be direct, use short responses, no fluff or lengthy explanations.
+- CONSTRAINTS: Ask exactly 5 diagnostic questions per turn when needed.
+- OUTPUT FORMAT: 5 bullet points max. No introductory text, no "I understand", no "Here are my questions".
 - NO HEADERS: No bold titles or section names.
 - NO OPTIONS: Do not use [Option: Label] syntax. Use plain text bullet points only.
-- NO PRE-PRICE: Do not mention ANY currency or cost until the very end of the diagnosis.
+- NO PRE-PRICE: Do not mention ANY currency or cost until sufficient information provided.
+- SHORT ANSWERS: When answering, keep each point brief and actionable.
 
 BILLING TRIGGER:
-Once you have sufficient information to provide a quote, discard the 5-bullet rule and output EXACTLY one line in this format:
+Once you have sufficient information to provide a quote, output EXACTLY one line:
 BILL_BREAKDOWN: Labor: ₹[Amount], Delivery: ₹[Amount], Distance: [KM]km, Total: ₹[Sum]
 `;
 
@@ -53,7 +56,7 @@ export const getExpertResponse = async (
 ): Promise<{ text: string; sources?: any[] }> => {
   try {
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const modelName = 'gemini-1.5-flash';
+    const modelName = 'gemini-1.5-flash-8b';
     let systemInstruction = REPAIR_COST_ALGORITHM + "\n" + PERSONA_INSTRUCTIONS;
 
     // Build contents from history
@@ -113,7 +116,7 @@ export const performVisualSearch = async (
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
   const response = await callWithRetry(() =>
     ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-8b',
       contents: {
         parts: [
           { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
