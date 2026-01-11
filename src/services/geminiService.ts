@@ -2,7 +2,7 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Message } from "../types";
 
 // Gemini API Key - Your provided key
-const GEMINI_API_KEY = "AIzaSyBVeo8VJ7fnxEZ0NuemVtD4zj_nO4piY7A";
+const GEMINI_API_KEY = "AIzaSyCbC1PvY_IRpPVPl-8SchfWNm4RsvHvD2U";
 
 const REPAIR_COST_ALGORITHM = `
 COST ESTIMATION ALGORITHM (Strictly follow these brackets in ₹):
