@@ -53,7 +53,7 @@ export const getExpertResponse = async (
 ): Promise<{ text: string; sources?: any[] }> => {
   try {
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const modelName = 'gemini-2.0-flash';
+    const modelName = 'gemini-1.5-flash';
     let systemInstruction = REPAIR_COST_ALGORITHM + "\n" + PERSONA_INSTRUCTIONS;
 
     // Build contents from history
@@ -111,9 +111,9 @@ export const performVisualSearch = async (
   base64Image: string
 ): Promise<VisualSearchSummary> => {
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-  const response = await callWithRetry(() => 
+  const response = await callWithRetry(() =>
     ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       contents: {
         parts: [
           { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
